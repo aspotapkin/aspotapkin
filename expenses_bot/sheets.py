@@ -56,26 +56,53 @@ class SheetsClient:
             creds = get_credentials(settings.oauth_client_secrets, settings.oauth_token)
             gc = gspread.authorize(creds)
         self.gc = gc
-        self.spreadsheet = self.gc.open_by_key(settings.spreadsheet_id)
+        self._books: dict[str, gspread.Spreadsheet] = {}
 
-    def worksheet_titles(self) -> list[str]:
-        return [ws.title for ws in self.spreadsheet.worksheets()]
+    def resolve_id(self, spreadsheet_id: str | None = None) -> str:
+        return (spreadsheet_id or self.settings.spreadsheet_id).strip()
 
-    def ensure_transfers_sheet(self) -> gspread.Worksheet:
+    def open(self, spreadsheet_id: str | None = None) -> gspread.Spreadsheet:
+        sid = self.resolve_id(spreadsheet_id)
+        book = self._books.get(sid)
+        if book is None:
+            book = self.gc.open_by_key(sid)
+            self._books[sid] = book
+        return book
+
+    def try_open(self, spreadsheet_id: str) -> tuple[bool, str]:
+        """Validate access via OAuth. Returns (ok, message)."""
+        try:
+            book = self.gc.open_by_key(spreadsheet_id)
+            self._books[spreadsheet_id] = book
+            title = book.title
+            return True, f"Открыта таблица «{title}»"
+        except gspread.exceptions.SpreadsheetNotFound:
+            return False, "Таблица не найдена или нет доступа у OAuth-аккаунта"
+        except PermissionError:
+            return False, "Нет доступа к таблице у OAuth-аккаунта"
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to open spreadsheet %s", spreadsheet_id)
+            return False, f"Не удалось открыть таблицу: {exc}"
+
+    def worksheet_titles(self, spreadsheet_id: str | None = None) -> list[str]:
+        return [ws.title for ws in self.open(spreadsheet_id).worksheets()]
+
+    def ensure_transfers_sheet(self, spreadsheet_id: str | None = None) -> gspread.Worksheet:
         """Return Переводы worksheet; create with header row if missing."""
         title = self.settings.ws_transfers
+        book = self.open(spreadsheet_id)
         try:
-            return self.spreadsheet.worksheet(title)
+            return book.worksheet(title)
         except gspread.WorksheetNotFound:
-            logger.info("Creating worksheet %s", title)
-            ws = self.spreadsheet.add_worksheet(title=title, rows=1000, cols=4)
+            logger.info("Creating worksheet %s in %s", title, self.resolve_id(spreadsheet_id))
+            ws = book.add_worksheet(title=title, rows=1000, cols=4)
             ws.append_row(WRITE_HEADERS, value_input_option="USER_ENTERED")
             return ws
 
-    def load_router_from_directory(self) -> CategoryRouter:
+    def load_router_from_directory(self, spreadsheet_id: str | None = None) -> CategoryRouter:
         """Prefer live Справочники category lists when the sheet is present."""
         router = default_router()
-        titles = self.worksheet_titles()
+        titles = self.worksheet_titles(spreadsheet_id)
         if self.settings.ws_directory not in titles:
             logger.warning(
                 "Worksheet %s not found; using notebook default category lists",
@@ -83,7 +110,7 @@ class SheetsClient:
             )
             return router
 
-        ws = self.spreadsheet.worksheet(self.settings.ws_directory)
+        ws = self.open(spreadsheet_id).worksheet(self.settings.ws_directory)
         values = ws.get_all_values()
         if not values:
             return router
@@ -120,16 +147,18 @@ class SheetsClient:
         self,
         target: WorksheetTarget | str,
         expenses: Iterable[Expense],
+        spreadsheet_id: str | None = None,
     ) -> int:
         rows = [e.as_sheet_row() for e in expenses]
         if not rows:
             return 0
 
         title = target.value if isinstance(target, WorksheetTarget) else target
+        book = self.open(spreadsheet_id)
         if title == self.settings.ws_transfers or target == WorksheetTarget.TRANSFERS:
-            ws = self.ensure_transfers_sheet()
+            ws = self.ensure_transfers_sheet(spreadsheet_id)
         else:
-            ws = self.spreadsheet.worksheet(title)
+            ws = book.worksheet(title)
 
         ws.append_rows(rows, value_input_option="USER_ENTERED")
         return len(rows)

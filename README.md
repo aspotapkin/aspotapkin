@@ -6,12 +6,26 @@ Spreadsheet: [Расходы](https://docs.google.com/spreadsheets/d/1M4X9kFTgdT
 
 ## What it does
 
-1. You send a statement file in Telegram.
-2. The bot detects the bank and parses **expenses only** (negative amounts; inflows skipped).
-3. Categories are normalized (T-Bank rename map from the Colab notebook) and routed:
+1. `/start` shows the current Google spreadsheet (masked) and how to change it.
+2. You send a statement file in Telegram.
+3. The bot detects the bank and parses **expenses only** (negative amounts; inflows skipped).
+4. Categories are normalized (T-Bank rename map from the Colab notebook) and routed:
    - **Повседневные** / **Квартира** / **Крупные** — by category lists (prefer live **Справочники** when available).
    - **Переводы** — transfers and anything that needs a manual category (blank **Категория**).
-4. Rows are appended with columns **Дата, Трата, Категория, Стоимость** only. **DW** / **MMYY** are left empty for sheet formulas.
+5. Rows are appended with columns **Дата, Трата, Категория, Стоимость** only. **DW** / **MMYY** are left empty for sheet formulas.
+
+### Per-user spreadsheet
+
+Each Telegram user can point the bot at their own sheet:
+
+| Command | Action |
+|---------|--------|
+| `/sheet` | Show current spreadsheet id (full + masked) and source |
+| `/set_sheet <id_or_url>` | Save id from a raw key or Sheets URL; validates format and tries OAuth open |
+| `/set_sheet` | Prompt: reply with id/URL next |
+| `/reset_sheet` | Clear personal override → fall back to `GOOGLE_SPREADSHEET_ID` |
+
+Prefs are stored on disk as JSON: `{DATA_DIR}/users.json` (default `./data/users.json`). If unset for a user, the bot uses `GOOGLE_SPREADSHEET_ID` from `.env`.
 
 ### Banks (v1)
 
@@ -77,12 +91,13 @@ cp .env.example .env
 Required:
 
 - `TELEGRAM_BOT_TOKEN`
-- `GOOGLE_SPREADSHEET_ID` (default is the Расходы sheet id)
+- `GOOGLE_SPREADSHEET_ID` — default spreadsheet (overridable per user via `/set_sheet`)
 - `GOOGLE_OAUTH_CLIENT_SECRETS` / `GOOGLE_OAUTH_TOKEN`
 
 Optional:
 
-- `TELEGRAM_ALLOWED_USER_IDS` — comma-separated Telegram user ids
+- `TELEGRAM_ALLOWED_USER_IDS` — comma-separated Telegram user ids (allowlist unchanged)
+- `DATA_DIR` — directory for `users.json` (default `./data`)
 - `WS_CASUAL` / `WS_FLAT` / `WS_BIG` / `WS_TRANSFERS` / `WS_DIRECTORY` — worksheet titles
 
 ## Run locally
@@ -126,14 +141,16 @@ Fixtures under `tests/fixtures/` are trimmed/copied from the project Context sam
 
 ```
 expenses_bot/
-  bot.py              # aiogram entry
+  bot.py              # aiogram entry (/start, /set_sheet, uploads)
   categories.py       # rename map + routing (incl. Переводы)
   config.py
   models.py
   pipeline.py
   sheets.py           # OAuth + append + Справочники + ensure Переводы
+  user_store.py       # per-Telegram-user spreadsheet id (JSON)
   oauth_setup.py
   parsers/            # tbank / ozon / yandex
+data/                 # runtime: users.json (gitignored)
 tests/
 scripts/
 ```

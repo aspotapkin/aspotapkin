@@ -22,6 +22,11 @@ class Settings:
     ws_transfers: str = WorksheetTarget.TRANSFERS.value
     ws_directory: str = "Справочники"
     download_dir: Path = Path("downloads")
+    data_dir: Path = Path("data")
+
+    @property
+    def user_store_path(self) -> Path:
+        return self.data_dir / "users.json"
 
 
 def _parse_user_ids(raw: str | None) -> frozenset[int]:
@@ -62,4 +67,5 @@ def load_settings(env_file: str | Path | None = ".env") -> Settings:
         ws_transfers=os.getenv("WS_TRANSFERS", WorksheetTarget.TRANSFERS.value),
         ws_directory=os.getenv("WS_DIRECTORY", "Справочники"),
         download_dir=Path(os.getenv("DOWNLOAD_DIR", "downloads")),
+        data_dir=Path(os.getenv("DATA_DIR", "data")),
     )

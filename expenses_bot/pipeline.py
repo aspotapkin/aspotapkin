@@ -15,6 +15,7 @@ class ImportResult:
     total_parsed: int
     grouped: dict[WorksheetTarget, list[Expense]]
     written: dict[str, int]
+    spreadsheet_id: str = ""
 
     @property
     def total_written(self) -> int:
@@ -27,11 +28,15 @@ def process_file(
     filename: str | None = None,
     sheets: SheetsClient | None = None,
     router: CategoryRouter | None = None,
+    spreadsheet_id: str | None = None,
     write: bool = True,
 ) -> ImportResult:
     bank, expenses = parse_statement(path, filename=filename)
-    if sheets is not None and router is None:
-        router = sheets.load_router_from_directory()
+    resolved_id = ""
+    if sheets is not None:
+        resolved_id = sheets.resolve_id(spreadsheet_id)
+        if router is None:
+            router = sheets.load_router_from_directory(resolved_id)
     router = router or default_router()
     grouped = route_and_group(expenses, router)
 
@@ -47,7 +52,7 @@ def process_file(
             if not rows:
                 written[title_map[target]] = 0
                 continue
-            count = sheets.append_expenses(target, rows)
+            count = sheets.append_expenses(target, rows, spreadsheet_id=resolved_id)
             written[title_map[target]] = count
 
     return ImportResult(
@@ -55,4 +60,5 @@ def process_file(
         total_parsed=len(expenses),
         grouped=grouped,
         written=written,
+        spreadsheet_id=resolved_id,
     )
