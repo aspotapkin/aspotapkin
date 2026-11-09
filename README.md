@@ -14,16 +14,20 @@ Spreadsheet: [Расходы](https://docs.google.com/spreadsheets/d/1M4X9kFTgdT
    - **Переводы** — transfers and anything that needs a manual category (blank **Категория**).
 5. Rows are appended with columns **Дата, Трата, Категория, Стоимость** only. **DW** / **MMYY** are left empty for sheet formulas.
 
-### Per-user spreadsheet
+### Commands
 
-Each Telegram user can point the bot at their own sheet:
+`/help` lists everything. `/start` points to it.
 
 | Command | Action |
 |---------|--------|
+| `/start` | Greeting, masked current sheet id, short tip |
+| `/help` | Full command list |
 | `/sheet` | Show current spreadsheet id (full + masked) and source |
 | `/set_sheet <id_or_url>` | Save id from a raw key or Sheets URL; validates format and tries OAuth open |
 | `/set_sheet` | Prompt: reply with id/URL next |
 | `/reset_sheet` | Clear personal override → fall back to `GOOGLE_SPREADSHEET_ID` |
+| `/cancel` | Cancel waiting for a spreadsheet id |
+| *(document)* | Upload `.csv` / `.pdf` statement → parse and append |
 
 Prefs are stored on disk as JSON: `{DATA_DIR}/users.json` (default `./data/users.json`). If unset for a user, the bot uses `GOOGLE_SPREADSHEET_ID` from `.env`.
 

@@ -67,17 +67,32 @@ def _format_result(result) -> str:
     return "\n".join(lines)
 
 
+def _help_text() -> str:
+    return (
+        "Команды:\n"
+        "• `/start` — приветствие, текущая таблица, краткая подсказка\n"
+        "• `/help` — этот список команд\n"
+        "• `/sheet` — показать текущий spreadsheet id (полный и короткий)\n"
+        "• `/set_sheet <id_или_url>` — сохранить таблицу (id или ссылка Google Sheets)\n"
+        "• `/set_sheet` — затем пришлите id/ссылку следующим сообщением\n"
+        "• `/reset_sheet` — сбросить персональную таблицу → `GOOGLE_SPREADSHEET_ID` из .env\n"
+        "• `/cancel` — отменить ожидание id таблицы\n\n"
+        "Файлы:\n"
+        "• пришлите документ `.csv` / `.pdf` — разбор выписки и запись в таблицу\n"
+        "  (T Bank CSV, Ozon Bank PDF, Yandex Bank PDF)\n\n"
+        "В таблицу пишутся только: Дата, Трата, Категория, Стоимость.\n"
+        "DW/MMYY не трогаем. Переводы и неопознанные категории → лист «Переводы»."
+    )
+
+
 def _start_text(sheet_id: str) -> str:
     return (
         "Бот учёта расходов.\n\n"
         f"Текущая Google-таблица: `{mask_spreadsheet_id(sheet_id)}`\n\n"
         "Пришлите выписку T Bank (CSV), Ozon Bank (PDF) или Yandex Bank (PDF).\n"
         "Расходы → Повседневные / Квартира / Крупные; переводы → Переводы.\n\n"
-        "Сменить таблицу:\n"
-        "• `/set_sheet <id_или_url>`\n"
-        "• или `/set_sheet` и пришлите id/ссылку следующим сообщением\n"
-        "• `/sheet` — показать текущий id\n"
-        "• `/reset_sheet` — вернуться к `GOOGLE_SPREADSHEET_ID` из .env"
+        "Список команд: `/help`\n\n"
+        "Сменить таблицу: `/set_sheet <id_или_url>` или `/set_sheet` и ответом."
     )
 
 
@@ -135,16 +150,7 @@ async def run_bot(settings: Settings) -> None:
         if not _allowed(message, settings):
             await message.answer("Нет доступа.")
             return
-        await message.answer(
-            "Поддерживаемые файлы v1:\n"
-            "• T Bank — CSV операций\n"
-            "• Ozon Bank — PDF справка о движении (списания)\n"
-            "• Yandex Bank — PDF выписка\n\n"
-            "В таблицу пишутся только колонки: Дата, Трата, Категория, Стоимость.\n"
-            "DW/MMYY не трогаем (формулы в таблице).\n"
-            "Лист «Переводы» — для ручной категоризации переводов.\n\n"
-            "Таблица: `/sheet`, `/set_sheet <id_или_url>`, `/reset_sheet`."
-        )
+        await message.answer(_help_text(), parse_mode="Markdown")
 
     @dp.message(Command("sheet"))
     async def sheet_cmd(message: Message) -> None:
@@ -264,7 +270,7 @@ async def run_bot(settings: Settings) -> None:
         if not _allowed(message, settings):
             return
         await message.answer(
-            "Пришлите файл выписки (.csv / .pdf), /help или /set_sheet"
+            "Пришлите файл выписки (.csv / .pdf) или /help"
         )
 
     logger.info("Bot started; user store at %s", settings.user_store_path)
