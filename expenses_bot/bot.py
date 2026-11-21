@@ -40,6 +40,7 @@ def _user_id(message: Message) -> int:
 
 
 def _format_result(result) -> str:
+    """Plain-text summary — no Markdown/HTML (user/bank/sheet strings may break entities)."""
     lines = [
         f"Банк: {result.bank}",
         f"Таблица: {mask_spreadsheet_id(result.spreadsheet_id) if result.spreadsheet_id else '—'}",
@@ -70,15 +71,15 @@ def _format_result(result) -> str:
 def _help_text() -> str:
     return (
         "Команды:\n"
-        "• `/start` — приветствие, текущая таблица, краткая подсказка\n"
-        "• `/help` — этот список команд\n"
-        "• `/sheet` — показать текущий spreadsheet id (полный и короткий)\n"
-        "• `/set_sheet <id_или_url>` — сохранить таблицу (id или ссылка Google Sheets)\n"
-        "• `/set_sheet` — затем пришлите id/ссылку следующим сообщением\n"
-        "• `/reset_sheet` — сбросить персональную таблицу → `GOOGLE_SPREADSHEET_ID` из .env\n"
-        "• `/cancel` — отменить ожидание id таблицы\n\n"
+        "• /start — приветствие, текущая таблица, краткая подсказка\n"
+        "• /help — этот список команд\n"
+        "• /sheet — показать текущий spreadsheet id (полный и короткий)\n"
+        "• /set_sheet <id_или_url> — сохранить таблицу (id или ссылка Google Sheets)\n"
+        "• /set_sheet — затем пришлите id/ссылку следующим сообщением\n"
+        "• /reset_sheet — сбросить персональную таблицу → GOOGLE_SPREADSHEET_ID из .env\n"
+        "• /cancel — отменить ожидание id таблицы\n\n"
         "Файлы:\n"
-        "• пришлите документ `.csv` / `.pdf` — разбор выписки и запись в таблицу\n"
+        "• пришлите документ .csv / .pdf — разбор выписки и запись в таблицу\n"
         "  (T Bank CSV, Ozon Bank PDF, Yandex Bank PDF)\n\n"
         "В таблицу пишутся только: Дата, Трата, Категория, Стоимость.\n"
         "DW/MMYY не трогаем. Переводы и неопознанные категории → лист «Переводы»."
@@ -88,11 +89,11 @@ def _help_text() -> str:
 def _start_text(sheet_id: str) -> str:
     return (
         "Бот учёта расходов.\n\n"
-        f"Текущая Google-таблица: `{mask_spreadsheet_id(sheet_id)}`\n\n"
+        f"Текущая Google-таблица: {mask_spreadsheet_id(sheet_id)}\n\n"
         "Пришлите выписку T Bank (CSV), Ozon Bank (PDF) или Yandex Bank (PDF).\n"
         "Расходы → Повседневные / Квартира / Крупные; переводы → Переводы.\n\n"
-        "Список команд: `/help`\n\n"
-        "Сменить таблицу: `/set_sheet <id_или_url>` или `/set_sheet` и ответом."
+        "Список команд: /help\n\n"
+        "Сменить таблицу: /set_sheet <id_или_url> или /set_sheet и ответом."
     )
 
 
@@ -114,7 +115,7 @@ async def _apply_sheet_id(
     ok, detail = await asyncio.to_thread(sheets.try_open, spreadsheet_id)
     if not ok:
         await message.answer(
-            f"Id выглядит валидным (`{mask_spreadsheet_id(spreadsheet_id)}`), "
+            f"Id выглядит валидным ({mask_spreadsheet_id(spreadsheet_id)}), "
             f"но открыть таблицу не удалось:\n{detail}\n"
             "Проверьте доступ OAuth-аккаунта и попробуйте снова."
         )
@@ -123,8 +124,7 @@ async def _apply_sheet_id(
     store.set_spreadsheet_id(_user_id(message), spreadsheet_id)
     await state.clear()
     await message.answer(
-        f"Таблица сохранена: `{mask_spreadsheet_id(spreadsheet_id)}`\n{detail}",
-        parse_mode="Markdown",
+        f"Таблица сохранена: {mask_spreadsheet_id(spreadsheet_id)}\n{detail}"
     )
 
 
@@ -143,14 +143,14 @@ async def run_bot(settings: Settings) -> None:
             return
         await state.clear()
         sheet_id = store.get_spreadsheet_id(_user_id(message), settings.spreadsheet_id)
-        await message.answer(_start_text(sheet_id), parse_mode="Markdown")
+        await message.answer(_start_text(sheet_id))
 
     @dp.message(Command("help"))
     async def help_cmd(message: Message) -> None:
         if not _allowed(message, settings):
             await message.answer("Нет доступа.")
             return
-        await message.answer(_help_text(), parse_mode="Markdown")
+        await message.answer(_help_text())
 
     @dp.message(Command("sheet"))
     async def sheet_cmd(message: Message) -> None:
@@ -161,9 +161,8 @@ async def run_bot(settings: Settings) -> None:
         sheet_id = personal or settings.spreadsheet_id
         source = "персональная настройка" if personal else "GOOGLE_SPREADSHEET_ID (.env)"
         await message.answer(
-            f"Текущая таблица: `{mask_spreadsheet_id(sheet_id)}`\nИсточник: {source}\n"
-            f"Полный id: `{sheet_id}`",
-            parse_mode="Markdown",
+            f"Текущая таблица: {mask_spreadsheet_id(sheet_id)}\nИсточник: {source}\n"
+            f"Полный id: {sheet_id}"
         )
 
     @dp.message(Command("set_sheet"))
@@ -202,8 +201,7 @@ async def run_bot(settings: Settings) -> None:
         await state.clear()
         await message.answer(
             "Персональная таблица сброшена. "
-            f"Используется `.env`: `{mask_spreadsheet_id(settings.spreadsheet_id)}`",
-            parse_mode="Markdown",
+            f"Используется .env: {mask_spreadsheet_id(settings.spreadsheet_id)}"
         )
 
     @dp.message(Command("cancel"))
@@ -243,9 +241,9 @@ async def run_bot(settings: Settings) -> None:
             return
 
         spreadsheet_id = store.get_spreadsheet_id(_user_id(message), settings.spreadsheet_id)
+        # Plain text: filenames / sheet ids often contain _ and break Telegram Markdown.
         await message.answer(
-            f"Обрабатываю «{name}» → `{mask_spreadsheet_id(spreadsheet_id)}`…",
-            parse_mode="Markdown",
+            f"Обрабатываю «{name}» → {mask_spreadsheet_id(spreadsheet_id)}…"
         )
         with tempfile.TemporaryDirectory(dir=settings.download_dir) as tmp:
             dest = Path(tmp) / name
@@ -263,7 +261,7 @@ async def run_bot(settings: Settings) -> None:
                 logger.exception("Failed to process %s", name)
                 await message.answer(f"Ошибка: {exc}")
                 return
-        await message.answer(_format_result(result), parse_mode="Markdown")
+        await message.answer(_format_result(result))
 
     @dp.message()
     async def fallback(message: Message) -> None:
