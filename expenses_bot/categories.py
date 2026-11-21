@@ -101,11 +101,14 @@ DEFAULT_BIG = [
 ]
 
 # Description keyword → sheet category (Ozon / Yandex and fallbacks).
+# Yandex merchants may use ".", " ", or "*MCC*" separators (e.g. YANDEX*4121*TAXI).
 DESCRIPTION_CATEGORY_RULES: list[tuple[tuple[str, ...], str]] = [
-    (("YANDEX.TAXI", "YANDEX TAXI", "ТАКСИ"), "Транспорт"),
-    (("YANDEX LAVKA", "YANDEX.LAVKA", "LAVKA"), "Питание"),
-    (("YANDEX PLUS", "YANDEX.PLUS"), "Регулярные"),
-    (("YANDEX.MARKET", "YANDEX MARKET"), "Маркетплейсы"),
+    (("YANDEX.TAXI", "YANDEX TAXI", "*TAXI", "ТАКСИ"), "Транспорт"),
+    (("YANDEX LAVKA", "YANDEX.LAVKA", "*LAVKA", "LAVKA"), "Питание"),
+    (("YANDEX PLUS", "YANDEX.PLUS", "*PLUS"), "Регулярные"),
+    (("YANDEX.MARKET", "YANDEX MARKET", "*MARKET"), "Маркетплейсы"),
+    (("YANDEX.EDA", "YANDEX EDA", "*EDA"), "Кафе/Ресторан"),
+    (("*AFISHA", "AFISHA"), "Развлечения"),
     (("OZON", "ПЛАТФОРМЕ OZON"), "Маркетплейсы"),
     (("МЕТРО", "METRO", "САМОКАТ", "SCOOTER", "БЕРИ ЗАРЯД"), "Транспорт"),
     (("АПТЕК", "PHARM", "АПТЕКА"), "Здоровье"),

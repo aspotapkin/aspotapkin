@@ -11,7 +11,9 @@ from expenses_bot.models import Expense
 AMOUNT_RE = re.compile(r"([+\-–−])\s*([\d\s\u00a0]+,\d{2})\s*₽")
 DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{4}")
 TIME_RE = re.compile(r"в\s+\d{2}:\d{2}")
-CARD_RE = re.compile(r"\*\d{4}")
+# Card column in Yandex statements is a standalone "*2678" token — NOT MCC codes
+# inside merchant names like "YANDEX*4121*TAXI".
+CARD_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9])\*\d{4}(?![A-Za-z0-9*])")
 
 
 def _parse_amount(text: str) -> float | None:
@@ -47,13 +49,21 @@ def _looks_like_continuation(line: str) -> bool:
         return True
     if line.startswith("КС") or line.startswith("+7") or line[:1].isdigit():
         return True
-    # ALLCAPS merchant fragments (PLUS, LAVKA, YANDEX.TAXI, …)
-    letters = re.sub(r"[^A-Za-zА-Яа-яЁё.]", "", line)
-    if letters and letters.upper() == letters and len(letters) >= 3:
+    # ALLCAPS merchant fragments (PLUS, LAVKA, YANDEX.TAXI, YANDEX*4121*TAXI, …)
+    letters = re.sub(r"[^A-Za-zА-Яа-яЁё.*]", "", line)
+    if letters and letters.upper() == letters and len(re.sub(r"[.*]", "", letters)) >= 3:
         return True
-    if any(k in line.upper() for k in ("YANDEX", "LAVKA", "TAXI", "PLUS", "MARKET")):
+    if any(k in line.upper() for k in ("YANDEX", "LAVKA", "TAXI", "PLUS", "MARKET", "EDA", "AFISHA")):
         return True
     return False
+
+
+def _description_from_amount_line(line: str) -> str:
+    """Take text before the first date; keep merchant MCC asterisks intact."""
+    description = DATE_RE.split(line, maxsplit=1)[0].strip()
+    # Drop only a trailing standalone card mask if it leaked before the date.
+    description = CARD_TOKEN_RE.sub("", description).strip()
+    return re.sub(r"\s+", " ", description)
 
 
 def parse_yandex(path: str | Path) -> list[Expense]:
@@ -79,18 +89,18 @@ def parse_yandex(path: str | Path) -> list[Expense]:
             continue
 
         date = dates[0]
-        description = DATE_RE.split(line, maxsplit=1)[0].strip()
-        description = CARD_RE.sub("", description).strip()
+        description = _description_from_amount_line(line)
 
-        # pdfplumber often puts merchant remainder on the next line: "YANDEX.TAXI в 15:14"
+        # pdfplumber often puts merchant remainder on the next line:
+        # "YANDEX.TAXI в 15:14" or "YANDEX*4121*TAXI в 11:12"
         j = i + 1
         extras: list[str] = []
         while j < len(lines) and _looks_like_continuation(lines[j]):
             extra = TIME_RE.sub("", lines[j]).strip(" ,")
+            # Never strip MCC asterisks from merchant continuation lines.
             if extra:
                 extras.append(extra)
             j += 1
-            # Usually one merchant line; allow a couple for long SBP texts / contract ids.
             if len(extras) >= 3:
                 break
 
